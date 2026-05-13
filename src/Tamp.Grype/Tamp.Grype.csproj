@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>net8.0;net9.0;net10.0</TargetFrameworks>
+    <RootNamespace>Tamp.Grype</RootNamespace>
+    <AssemblyName>Tamp.Grype</AssemblyName>
+  </PropertyGroup>
+
+  <PropertyGroup Label="Package">
+    <PackageId>Tamp.Grype</PackageId>
+    <Description>Wrapper for anchore/grype — focused CVE/vulnerability scanner across 20+ language ecosystems (Rust, npm, .NET, Go, Java, Python, PHP, etc.) plus all major Linux distros. Reads CycloneDX/SPDX/syft-json SBOMs (pairs natively with Tamp.Syft) or scans directories / files / container images directly. EPSS + KEV + CVSS composite risk scoring for prioritization. CI gating via --fail-on severity.</Description>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <IsPackable>true</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="..\..\README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="$(TampCorePath)" Condition="'$(TampCoreMode)' == 'project'" />
+    <PackageReference Include="Tamp.Core" Condition="'$(TampCoreMode)' == 'package'" />
+    <PackageReference Include="Microsoft.SourceLink.GitHub" PrivateAssets="All" />
+  </ItemGroup>
+
+</Project>
