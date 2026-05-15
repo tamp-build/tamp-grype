@@ -81,6 +81,17 @@ public static class Grype
 
         public static CommandPlan Diff(Tool tool, Action<GrypeDbDiffSettings> configure)
             => Run<GrypeDbDiffSettings>(tool, configure);
+
+        // ---- Object-init overloads (TAM-161) ----
+        public static CommandPlan Update(Tool tool, GrypeDbUpdateSettings settings) => Plan(tool, settings);
+        public static CommandPlan Check(Tool tool, GrypeDbCheckSettings settings) => Plan(tool, settings);
+        public static CommandPlan Status(Tool tool, GrypeDbStatusSettings settings) => Plan(tool, settings);
+        public static CommandPlan List(Tool tool, GrypeDbListSettings settings) => Plan(tool, settings);
+        public static CommandPlan Providers(Tool tool, GrypeDbProvidersSettings settings) => Plan(tool, settings);
+        public static CommandPlan Delete(Tool tool, GrypeDbDeleteSettings settings) => Plan(tool, settings);
+        public static CommandPlan Import(Tool tool, GrypeDbImportSettings settings) => Plan(tool, settings);
+        public static CommandPlan Search(Tool tool, GrypeDbSearchSettings settings) => Plan(tool, settings);
+        public static CommandPlan Diff(Tool tool, GrypeDbDiffSettings settings) => Plan(tool, settings);
     }
 
     /// <summary>Raw escape hatch.</summary>
@@ -99,11 +110,32 @@ public static class Grype
         };
     }
 
+    // ---- Object-init overloads (TAM-161) ----
+    // Parallel surface to the fluent verbs above. Both styles produce identical
+    // CommandPlans; fluent stays canonical in docs and `tamp init` templates.
+    //
+    //     Grype.Scan(grype, new() { SbomSource = sbom, FailOn = "high" });
+    //
+    // is equivalent to:
+    //
+    //     Grype.Scan(grype, s => s.SetSbomSource(sbom).SetFailOn("high"));
+    public static CommandPlan Scan(Tool tool, GrypeScanSettings settings) => Plan(tool, settings);
+    public static CommandPlan Explain(Tool tool, GrypeExplainSettings settings) => Plan(tool, settings);
+    public static CommandPlan Config(Tool tool, GrypeConfigSettings settings) => Plan(tool, settings);
+    public static CommandPlan Version(Tool tool, GrypeVersionSettings settings) => Plan(tool, settings);
+
     private static CommandPlan Run<T>(Tool tool, Action<T>? configure) where T : GrypeSettingsBase, new()
     {
         if (tool is null) throw new ArgumentNullException(nameof(tool));
         var s = new T();
         configure?.Invoke(s);
         return s.ToCommandPlan(tool);
+    }
+
+    private static CommandPlan Plan<T>(Tool tool, T settings) where T : GrypeSettingsBase
+    {
+        if (tool is null) throw new ArgumentNullException(nameof(tool));
+        if (settings is null) throw new ArgumentNullException(nameof(settings));
+        return settings.ToCommandPlan(tool);
     }
 }
