@@ -18,11 +18,22 @@
   </ItemGroup>
 
   <ItemGroup Label="Tamp packages">
-    <PackageVersion Include="Tamp.Core" Version="1.17.2" />
+    <PackageVersion Include="Tamp.Core" Version="1.17.5" />
+    <!--
+      Tamp.Core / Tamp.Sarif 1.17.5 is a floor, not simply the version that was current:
+      * 1.17.5 is the first release with the SARIF logicalLocations API (tamp#114), which
+        GrypeSarif uses to carry each finding's purl. 1.17.2 does not have it, and the gap is
+        invisible in a project-mode build against a newer sibling checkout: it surfaces only
+        in CI, which restores in package mode.
+      * Tamp.Sarif ships in lockstep with Tamp.Core and depends on Tamp.Core at or above its
+        own version, so every Tamp.* pin here moves together or restore fails NU1605.
+      * Nothing here needs anything newer.
+    -->
+    <PackageVersion Include="Tamp.Sarif" Version="1.17.5" />
     <PackageVersion Include="Tamp.Telegram" Version="0.1.0" />
-    <PackageVersion Include="Tamp.NetCli.V10" Version="1.17.2" />
-    <PackageVersion Include="Tamp.Components" Version="1.17.2" />
-    <PackageVersion Include="Tamp.Components.NetCli.V10" Version="1.17.2" />
+    <PackageVersion Include="Tamp.NetCli.V10" Version="1.17.5" />
+    <PackageVersion Include="Tamp.Components" Version="1.17.5" />
+    <PackageVersion Include="Tamp.Components.NetCli.V10" Version="1.17.5" />
     <PackageVersion Include="Tamp.SonarScanner.V10" Version="0.1.0" />
   </ItemGroup>
 
