@@ -83,7 +83,7 @@ public static class GrypeSarif
                 + "grype's own SARIF cannot be used as input, which is the point of this conversion.");
 
         var grypeVersion = (string?)report["descriptor"]?["version"];
-        var root = options.SourceRoot is { Length: > 0 } r ? NormalizeDirectory(r) : null;
+        var root = RepositoryPath.NormalizeRoot(options.SourceRoot);
 
         var rules = new Dictionary<string, SarifRule>(StringComparer.Ordinal);
         var results = new List<SarifResult>();
@@ -130,8 +130,12 @@ public static class GrypeSarif
             string? file = null;
             if (rawLocation is { Length: > 0 })
             {
-                file = Relativize(rawLocation, root);
-                if (root is not null && IsAbsolute(file.Replace('\\', '/'))) unrooted.Add(rawLocation);
+                // Core returns null for "not under this root". The policy here differs from the SBOM
+                // profiler's on purpose: keep the awkward absolute path rather than drop the only
+                // location a human has for a vulnerability — but record it, so a caller can tell.
+                file = RepositoryPath.Relativize(rawLocation, root)
+                    ?? rawLocation.Replace('\\', '/');
+                if (RepositoryPath.IsAbsolute(file)) unrooted.Add(rawLocation);
             }
 
             var ruleId = RuleIdFor(options.RuleIdScope, advisory, package, version);
@@ -193,6 +197,14 @@ public static class GrypeSarif
                 Properties = properties,
             });
         }
+
+        if (options.ThrowOnUnrootedPaths && unrooted.Count > 0)
+            throw new InvalidOperationException(
+                $"{unrooted.Count} location(s) are not under SourceRoot '{options.SourceRoot}', so the SARIF would "
+                + "carry absolute paths and the findings would anchor to nothing in the repository. "
+                + $"First: '{unrooted.First()}'. SourceRoot has to be expressed in the same space as the locations "
+                + "grype reported: a virtual path like '/pnpm-lock.yaml' needs SourceRoot = \"/\", and no filesystem "
+                + "directory will ever contain it. Set ThrowOnUnrootedPaths = false to emit them as-is instead.");
 
         var log = new SarifLog
         {
@@ -414,32 +426,4 @@ public static class GrypeSarif
 
     private static JsonElement Json(string value) => JsonSerializer.SerializeToElement(value);
 
-    private static string NormalizeDirectory(string path) => path.Replace('\\', '/').TrimEnd('/');
-
-    /// <summary>
-    /// <paramref name="location"/> relative to <paramref name="normalizedRoot"/>, forward-slashed. A
-    /// path outside the root is returned as-is rather than dropped: an awkward location beats no
-    /// location for a vulnerability someone has to find. String-based rather than <see cref="Path"/>-based,
-    /// because a scan captured on a Linux runner is routinely converted on Windows and vice versa.
-    /// </summary>
-    internal static string Relativize(string location, string? normalizedRoot)
-    {
-        var path = location.Replace('\\', '/');
-        while (path.StartsWith("./", StringComparison.Ordinal)) path = path[2..];
-        if (normalizedRoot is null || normalizedRoot.Length == 0) return path;
-
-        var comparison = LooksWindows(path) || LooksWindows(normalizedRoot)
-            ? StringComparison.OrdinalIgnoreCase
-            : StringComparison.Ordinal;
-
-        return path.StartsWith(normalizedRoot + "/", comparison) ? path[(normalizedRoot.Length + 1)..] : path;
-    }
-
-    private static bool IsAbsolute(string forwardSlashPath)
-        => forwardSlashPath.StartsWith('/')
-           || (forwardSlashPath.Length >= 3 && char.IsLetter(forwardSlashPath[0])
-               && forwardSlashPath[1] == ':' && forwardSlashPath[2] == '/');
-
-    private static bool LooksWindows(string forwardSlashPath)
-        => forwardSlashPath.Length >= 2 && char.IsLetter(forwardSlashPath[0]) && forwardSlashPath[1] == ':';
 }
