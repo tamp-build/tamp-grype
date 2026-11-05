@@ -79,9 +79,16 @@ public sealed class GrypeSarifOptions
 {
     /// <summary>
     /// The repository root, so emitted locations are repository-relative. <b>Strongly recommended.</b>
-    /// grype reports the location it was handed, which for an SBOM scan is whatever absolute path syft
+    /// grype reports the location it was handed, which for an SBOM scan is whatever path syft
     /// recorded — measured: <c>C:\TEMP\claude\gl-syft\multi\frontend\pnpm-lock.yaml</c>. A finding
     /// anchored to an absolute path on a runner points at nothing in the repository.
+    /// <para>
+    /// It must be expressed in the <b>same space</b> as the locations grype reported. syft often
+    /// records against the scan's virtual filesystem, in which case a lockfile at the root of the
+    /// scanned tree is <c>/pnpm-lock.yaml</c> and <c>SourceRoot</c> is <c>"/"</c> — no filesystem
+    /// directory will ever contain that path (tamp-grype#9). Use the scanned directory only when the
+    /// locations are host paths.
+    /// </para>
     /// </summary>
     public string? SourceRoot { get; set; }
 
@@ -97,6 +104,23 @@ public sealed class GrypeSarifOptions
     /// unresolvable base id is worse than none.
     /// </summary>
     public bool EmitUriBaseId { get; set; }
+
+    /// <summary>
+    /// Fail when a location cannot be made repository-relative, rather than emitting it absolute.
+    /// Default <see langword="true"/>, matching <c>Tamp.Syft</c>'s <c>GitLabSbom</c>.
+    /// </summary>
+    /// <remarks>
+    /// An absolute location means the SARIF ingests and anchors the finding to nothing, which is the
+    /// failure <see cref="SourceRoot"/> exists to prevent — and the only way a caller previously
+    /// learned of it was by inspecting <see cref="GrypeSarifResult.UnrootedLocations"/> after the
+    /// fact (tamp-grype#9). Turn it off when some locations legitimately sit outside the repository,
+    /// such as a scanned container image alongside a checkout; they are then emitted as grype
+    /// reported them and listed in that collection.
+    /// </remarks>
+    public bool ThrowOnUnrootedPaths { get; set; } = true;
+
+    /// <summary>Set <see cref="ThrowOnUnrootedPaths"/>.</summary>
+    public GrypeSarifOptions SetThrowOnUnrootedPaths(bool v = true) { ThrowOnUnrootedPaths = v; return this; }
 
     /// <summary>Set <see cref="SourceRoot"/>.</summary>
     public GrypeSarifOptions SetSourceRoot(string? path) { SourceRoot = path; return this; }

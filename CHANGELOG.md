@@ -7,6 +7,24 @@ versions follow [SemVer](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-05 - SourceRoot of "/" works; unrooted locations fail loudly
+
+### Fixed
+
+- **A `SourceRoot` of `/` no longer leaves locations absolute** ([#9](https://github.com/tamp-build/tamp-grype/issues/9)). `NormalizeDirectory("/")` returned the empty string, `Relativize` read that as "no root" and returned the path unchanged, and the caller was told the location was unrooted while the emitted SARIF carried the absolute path anyway — exactly the failure `SourceRoot` exists to prevent.
+
+  `/` is the correct root for the common case: grype reports the location syft recorded, and syft records against the scan's virtual filesystem, so a lockfile at the root of the scanned tree is `/pnpm-lock.yaml`. It was the one value that did not work.
+
+### Added
+
+- **`GrypeSarifOptions.ThrowOnUnrootedPaths`**, default `true` ([#9](https://github.com/tamp-build/tamp-grype/issues/9)), matching `Tamp.Syft`'s `GitLabSbom`. An absolute location means the SARIF ingests and anchors the finding to nothing, and the only way a caller previously learned of it was by inspecting `UnrootedLocations` after the fact — or, with `SourceRoot` unset, not at all: the path was emitted absolute with nothing even added to that collection. Turn it off when some locations legitimately sit outside the repository, and they are emitted as grype reported them and listed.
+
+  The message explains the space mismatch rather than repeating the advice that leads nowhere: a virtual path needs `SourceRoot = "/"`, and no filesystem directory will ever contain it.
+
+### Changed
+
+- **Path relativization moves to `Tamp.Core`'s `RepositoryPath`** ([#9](https://github.com/tamp-build/tamp-grype/issues/9)), so `Tamp.Core` ≥ **1.20.0** is now required. This wrapper and `Tamp.Syft`'s `GitLabSbom` each carried a private copy, already diverged three ways while both carried the same `/` bug. Mechanism in core, policy here: core answers "relative to that root, or not under it at all", and this converter keeps its own decision to retain an awkward absolute path rather than lose the only location a human has for a vulnerability.
+
 ## [0.2.0] - 2026-11-05 - SARIF that survives the trip to a consumer
 
 ### Added

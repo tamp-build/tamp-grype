@@ -76,6 +76,9 @@ public sealed class GrypeSarifTests
     private static GrypeSarifResult Convert(string json, GrypeSarifOptions? options = null)
         => GrypeSarif.FromJson(json, options ?? new GrypeSarifOptions { SourceRoot = Root });
 
+    private static GrypeSarifOptions Lenient(string? root = Root)
+        => new() { SourceRoot = root, ThrowOnUnrootedPaths = false };
+
     private static IReadOnlyList<SarifResult> Results(GrypeSarifResult result) => result.Log.Runs[0].Results!;
 
     private static SarifRule RuleFor(GrypeSarifResult result, SarifResult sarifResult)
@@ -181,20 +184,65 @@ public sealed class GrypeSarifTests
         Assert.Empty(result.UnrootedLocations);
     }
 
+    // Path relativization itself now lives in Tamp.Core's RepositoryPath and is tested there
+    // (tamp-grype#9); these cover the policy this converter applies on top of it.
+
     [Theory]
-    [InlineData(@"C:\TEMP\claude\multi\frontend\pnpm-lock.yaml", @"C:\Temp\claude\multi", "frontend/pnpm-lock.yaml")]
+    // syft records locations against the scan's virtual filesystem, so a lockfile at the root of the
+    // scanned tree is "/pnpm-lock.yaml" and "/" is the root that describes it. That was the one
+    // SourceRoot value that did not work (#9).
+    [InlineData("/pnpm-lock.yaml", "/", "pnpm-lock.yaml")]
+    [InlineData("/frontend/pnpm-lock.yaml", "/", "frontend/pnpm-lock.yaml")]
     [InlineData("/src/repo/go.mod", "/src/repo", "go.mod")]
-    [InlineData("./go.mod", "/src/repo", "go.mod")]
-    [InlineData("go.mod", "/src/repo", "go.mod")]
-    // Outside the root: kept, because an awkward location beats no location for something to fix.
-    [InlineData("/elsewhere/go.mod", "/src/repo", "/elsewhere/go.mod")]
-    public void Relativize_Handles_What_Grype_Emits(string location, string root, string expected)
-        => Assert.Equal(expected, GrypeSarif.Relativize(location, root.Replace('\\', '/').TrimEnd('/')));
+    public void A_Location_Becomes_Repository_Relative(string location, string root, string expected)
+    {
+        var result = Convert(Report(Match(location: location)), new GrypeSarifOptions { SourceRoot = root });
+
+        Assert.Equal(expected, Results(result)[0].Locations![0].PhysicalLocation!.ArtifactLocation!.Uri);
+        Assert.Empty(result.UnrootedLocations);
+    }
+
+    [Fact]
+    public void A_Virtual_Root_Converts_Every_Location()
+    {
+        var result = Convert(Report(
+            Match(location: "/frontend/pnpm-lock.yaml"),
+            Match(advisory: "GHSA-zzzz", location: "/api/package-lock.json")),
+            new GrypeSarifOptions { SourceRoot = "/" });
+
+        Assert.Empty(result.UnrootedLocations);
+        Assert.Equal(
+            ["api/package-lock.json", "frontend/pnpm-lock.yaml"],
+            Results(result).Select(r => r.Locations![0].PhysicalLocation!.ArtifactLocation!.Uri).Order(StringComparer.Ordinal));
+    }
+
+    [Fact]
+    public void An_Unrooted_Location_Fails_By_Default()
+    {
+        // Emitting it absolute means the SARIF ingests and anchors nothing, and the only way a
+        // caller learned of it before was by inspecting UnrootedLocations afterwards (#9).
+        var ex = Assert.Throws<InvalidOperationException>(
+            () => Convert(Report(Match(location: "/pnpm-lock.yaml")), new GrypeSarifOptions { SourceRoot = "/src/repo" }));
+
+        Assert.Contains("same space", ex.Message, StringComparison.Ordinal);
+        Assert.Contains("anchor to nothing", ex.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void An_Unrooted_Location_Can_Be_Emitted_As_Reported()
+    {
+        // Lenient mode keeps the awkward absolute path: losing the only location a human has for a
+        // vulnerability is worse than an ugly one. It is still listed.
+        var result = Convert(Report(Match(location: "/elsewhere/go.mod")), Lenient());
+
+        Assert.Equal("/elsewhere/go.mod", Results(result)[0].Locations![0].PhysicalLocation!.ArtifactLocation!.Uri);
+        Assert.Equal(["/elsewhere/go.mod"], result.UnrootedLocations);
+    }
 
     [Fact]
     public void A_Location_Outside_The_Source_Root_Is_Reported()
     {
-        var result = Convert(Report(Match(location: "/opt/cache/node_modules/.pnpm-lock.yaml")));
+        var result = Convert(Report(Match(location: "/opt/cache/node_modules/.pnpm-lock.yaml")), Lenient());
 
         Assert.Single(result.UnrootedLocations);
         Assert.Contains("1 unrooted location(s)", result.ToString(), StringComparison.Ordinal);
@@ -427,12 +475,21 @@ public sealed class GrypeSarifTests
         => Assert.Throws<ArgumentNullException>(() => GrypeSarif.FromJson(null!));
 
     [Fact]
-    public void Options_Are_Optional()
+    public void Without_A_Source_Root_The_Default_Fails_Loudly()
     {
-        // Without a source root the location is grype's own, forward-slashed. Usable, but the reason
-        // SourceRoot is recommended.
-        var result = GrypeSarif.FromJson(Report(Match()));
+        // Previously this silently emitted the absolute path with nothing added to UnrootedLocations
+        // — the quietest form of the #9 failure: a report that ingests and anchors nothing, with no
+        // diagnostic at all.
+        var ex = Assert.Throws<InvalidOperationException>(() => GrypeSarif.FromJson(Report(Match())));
+        Assert.Contains("SourceRoot", ex.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Options_Are_Optional_When_Strictness_Is_Off()
+    {
+        var result = GrypeSarif.FromJson(Report(Match()), new GrypeSarifOptions { ThrowOnUnrootedPaths = false });
 
         Assert.Equal("/src/repo/frontend/pnpm-lock.yaml", Results(result)[0].Locations![0].PhysicalLocation!.ArtifactLocation!.Uri);
+        Assert.Single(result.UnrootedLocations);
     }
 }
