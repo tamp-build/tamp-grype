@@ -7,6 +7,8 @@ versions follow [SemVer](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-05 - SARIF that survives the trip to a consumer
+
 ### Added
 
 - **`GrypeSarif` -- SARIF built from grype's JSON, so findings survive the trip to a consumer** ([#6](https://github.com/tamp-build/tamp-grype/issues/6)). Three defects in grype's own SARIF survived into GitLab's UI and misrepresented the scan; a fourth made repairing that SARIF unsound. All four measured on grype 0.112.0 over one real 299-match scan:
