@@ -164,6 +164,121 @@ Tighten over time: start at `critical` on day 1, ratchet to `high` once you've w
 
 When the security team has triaged a finding and decided it's not exploitable in your specific use case, encode it as a [VEX](https://openvex.dev/) document and feed it to grype via `AddVexDocument(path)`. The finding gets suppressed (and shown only with `SetShowSuppressed(true)`). Avoids re-triaging the same false positive on every CI run.
 
+## SARIF that survives the trip to GitLab
+
+grype's own SARIF has three defects that survive into GitLab's UI and misrepresent the scan, and a
+fourth that makes repairing that SARIF unsound. All four were measured on grype 0.112.0 over one real
+299-match scan:
+
+| | grype's own SARIF | `GrypeSarif.FromJson` |
+|---|---|---|
+| results | 299 | 299 |
+| distinct `(ruleId, location)` keys -- **what a deduplicating consumer displays** | **268** | **299** |
+| distinct `partialFingerprints` | **62** | **299** |
+| artifact URI | `C:\TEMP\claude\multi\frontend\pnpm-lock.yaml` | `frontend/pnpm-lock.yaml` |
+| results where `level` and `security-severity` disagree | 2 | **0** |
+
+### The four defects
+
+**1. Distinct affected versions collapse.** `GHSA-587h-7wmj-h5pm-vite` carried two results -- vite
+5.4.21 and vite 7.3.1 -- under one rule id at one location. Since every component in a lock file
+reports the *same* location, the rule id is the only part of the `(ruleId, location)` key that can
+keep them apart. 31 affected package-versions disappeared. One displayed finding is not one affected
+version, and anything counting displayed findings as affected packages under-reports.
+
+**2. Fingerprints identify the package, not the finding.** grype's
+`partialFingerprints.primaryLocationLineHash` was shared by **35 different advisories** against
+`hono 4.12.3`. 278 of 299 results carried a fingerprint duplicated by another result, so a consumer
+deduplicating on fingerprints -- their entire purpose -- collapses 299 findings to **62**.
+
+**3. The artifact URI is not repository-relative.** It is whatever absolute path the scan was handed,
+so findings anchor to a path on the runner rather than a file in the repository.
+
+**4. The version is only in the message prose.** A result's rule listed
+`purls: ["pkg:npm/vite@5.4.21"]` while one of its two results was vite **7.3.1** -- the rule's own
+metadata is wrong for that result, and the only per-result carrier of the version is the English
+message string. **This is why the conversion reads grype's JSON instead of patching its SARIF:**
+repairing identity from a prose sentence would make correctness depend on grype's message wording.
+
+grype's JSON carries all of it structurally -- `artifact.name`, `artifact.version`, `artifact.purl`,
+`artifact.locations[].path`, `vulnerability.severity`, `vulnerability.cvss[].metrics.baseScore`,
+`fix` -- and yields the same 299 matches.
+
+### Using it
+
+```csharp
+Target Vulnerabilities => _ => _
+    .Description("[Security] grype, as SARIF a consumer reads correctly")
+    .Executes(() =>
+    {
+        // Capture JSON, not SARIF: the JSON is the richer artifact and the only sound input.
+        ProcessRunner.Run(Grype.Scan(GrypeTool, s => s
+            .SetSbomSource(Artifacts / "sbom.cdx.json")
+            .AddOutputJson()
+            .SetOutputFile(Artifacts / "grype.json")));
+
+        var report = GrypeSarif.ConvertFile(
+            Artifacts / "grype.json",
+            Artifacts / "grype.sarif",
+            new GrypeSarifOptions { SourceRoot = RootDirectory });
+
+        Log.Information("{Report}", report);
+
+        // The counters exist because this failure is invisible in the output: a collapsed list looks
+        // exactly like a correct, shorter one.
+        if (report.Collapses)
+            throw new Exception($"findings would collapse in a deduplicating consumer: {report}");
+    });
+```
+
+```yaml
+# .gitlab-ci.yml -- Ultimate tier; SARIF ingestion is GitLab 19.1+, GA in 19.2.
+vulnerabilities:
+  script: ./tamp.sh Vulnerabilities
+  artifacts:
+    reports:
+      sarif: artifacts/grype.sarif
+```
+
+### Identity
+
+`GrypeRuleIdScope.AdvisoryPackageVersion` (the default) builds rule ids as
+`<advisory>/<package>@<version>`, so two affected versions of one package under one advisory stay two
+findings. That is the convention grype already uses -- it puts the package name in the id -- carried
+one field further. `AdvisoryPackage` reproduces grype's own shape (and its collapse) for parity;
+`Advisory` collapses further still, for consumers that key suppressions on a bare advisory id.
+
+The fingerprint is SHA-256 over advisory + purl + location, which distinguishes **both** axes grype's
+own fingerprint collapses: two versions of one package, and two advisories against one version. The
+purl also travels as a `logicalLocation`, so a consumer reading only locations still sees which
+version is affected.
+
+### Severity: which one governs, stated
+
+grype reports two severities that do not always agree -- the advisory's qualitative label and a CVSS
+base score. Measured over 299 matches, 2 disagreed: a `Medium` label carrying CVSS 7.5, which a
+consumer bucketing the number displays as **High**, and a `Low` label carrying 4.3, displayed as
+**Medium**. Both numbers are defensible; shipping both without saying which governs means the
+displayed severity is not the scanner's severity, and a gate written against one does not hold
+against the other.
+
+| `GrypeSeverityGovernance` | `security-severity` | SARIF `level` from | the other value |
+|---|---|---|---|
+| `Cvss` (default) | the real CVSS base score | the same score, so the two cannot disagree | `grype.severity` in result properties |
+| `ScannerLabel` | **omitted** | grype's label | `grype.cvssBaseScore` in result properties |
+
+**Neither option invents a number or moves a threshold.** One uses the real CVSS score; the other
+omits the numeric field so a consumer falls back to `level`. Both severities travel with every result
+either way, so a triage script can see the disagreement rather than inherit it silently. The CVSS
+bands used (9.0+ / 7.0+ / 4.0+ / 0.1+) are the specification's own, not a Tamp invention.
+
+### What is not changed
+
+No match is filtered, no severity threshold is moved, no score is invented. grype decides what counts
+as a finding; this decides how a finding is described. Every match becomes exactly one SARIF result,
+and anything unusable is counted in `Dropped` rather than quietly skipped. grype's JSON is left in
+place -- it is the richer artifact and worth publishing alongside.
+
 ## Pairs with
 
 - **[`Tamp.Syft`](https://github.com/tamp-build/tamp-syft)** — SBOM generator. Output flows directly into `Grype.SetSbomSource(...)`.

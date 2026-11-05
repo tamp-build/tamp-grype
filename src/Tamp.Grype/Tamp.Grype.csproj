@@ -20,6 +20,9 @@
   <ItemGroup>
     <ProjectReference Include="$(TampCorePath)" Condition="'$(TampCoreMode)' == 'project'" />
     <PackageReference Include="Tamp.Core" Condition="'$(TampCoreMode)' == 'package'" />
+    <!-- GrypeSarif builds a SarifLog with Tamp.Sarif's model and writer. -->
+    <ProjectReference Include="$(TampSarifPath)" Condition="'$(TampCoreMode)' == 'project'" />
+    <PackageReference Include="Tamp.Sarif" Condition="'$(TampCoreMode)' == 'package'" />
     <PackageReference Include="Microsoft.SourceLink.GitHub" PrivateAssets="All" />
   </ItemGroup>
 

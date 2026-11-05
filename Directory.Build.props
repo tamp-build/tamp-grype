@@ -31,6 +31,7 @@
   <PropertyGroup Label="Tamp.Core dependency mode">
     <TampCoreMode Condition="'$(TampCoreMode)' == ''">project</TampCoreMode>
     <TampCorePath Condition="'$(TampCorePath)' == ''">$(MSBuildThisFileDirectory)..\tamp\src\Tamp.Core\Tamp.Core.csproj</TampCorePath>
+    <TampSarifPath Condition="'$(TampSarifPath)' == ''">$(MSBuildThisFileDirectory)..\tamp\src\Tamp.Sarif\Tamp.Sarif.csproj</TampSarifPath>
   </PropertyGroup>
 
   <PropertyGroup Label="Tamp central version">

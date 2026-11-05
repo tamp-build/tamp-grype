@@ -19,6 +19,11 @@
 
   <ItemGroup Label="Tamp packages">
     <PackageVersion Include="Tamp.Core" Version="1.17.2" />
+    <!--
+      Tamp.Sarif for GrypeSarif. It ships in lockstep with Tamp.Core and depends on
+      Tamp.Core >= its own version, so the two pins move together or restore fails NU1605.
+    -->
+    <PackageVersion Include="Tamp.Sarif" Version="1.17.2" />
     <PackageVersion Include="Tamp.Telegram" Version="0.1.0" />
     <PackageVersion Include="Tamp.NetCli.V10" Version="1.17.2" />
     <PackageVersion Include="Tamp.Components" Version="1.17.2" />
