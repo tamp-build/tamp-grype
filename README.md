@@ -39,7 +39,7 @@ Default sort is `risk` (the composite). Meaningfully better than raw-severity fo
 dotnet add package Tamp.Grype
 ```
 
-Multi-targets net8 / net9 / net10. Requires `Tamp.Core` ≥ **1.6.0**.
+Multi-targets net8 / net9 / net10. Requires `Tamp.Core` ≥ **1.17.5** (the first release with the SARIF `logicalLocations` API that `GrypeSarif` uses).
 
 ## Tool installation
 

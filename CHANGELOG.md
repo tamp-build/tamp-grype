@@ -32,7 +32,7 @@ versions follow [SemVer](https://semver.org/spec/v2.0.0.html).
 
 - Nothing is filtered, no threshold moved, no score invented: grype decides what is a finding, this decides how a finding is described. Every match becomes exactly one result; anything unusable is counted in `Dropped` rather than quietly skipped.
 - Capture grype with `-o json`, not `-o sarif`. Passing grype's SARIF in is refused with that advice, since it is the likeliest mistake.
-- New dependency: `Tamp.Sarif`, for the SARIF model and writer. It ships in lockstep with `Tamp.Core`, so the two pins move together.
+- New dependency: `Tamp.Sarif`, for the SARIF model and writer. **The `Tamp.Core` floor rises to 1.17.5**: that is the first release with the SARIF `logicalLocations` API ([tamp#114](https://github.com/tamp-build/tamp/pull/114)), which carries each finding's purl. Tamp.Sarif ships in lockstep with Tamp.Core and depends on Tamp.Core >= its own version, so every `Tamp.*` pin moves together or restore fails NU1605.
 
 ## [0.1.1] — 2026-09-27
 
