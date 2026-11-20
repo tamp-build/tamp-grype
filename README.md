@@ -303,7 +303,7 @@ See [Build Script Authoring → Two authoring styles](https://github.com/tamp-bu
 > GitHub-side assignment failure, not a workflow problem — and it was reporting as a red check on
 > pull requests that were otherwise green.
 >
-> **Linux and Windows CI are unchanged**, and the build still targets net8.0, net9.0 and net10.0 on
+> **Linux and Windows CI are unchanged**, and the build still targets net10.0 and net11.0 on
 > both. macOS remains a supported runtime for this package; what is paused is the CI leg that
 > verifies it, which means a macOS-specific regression could land unnoticed while this is in effect.
 >
