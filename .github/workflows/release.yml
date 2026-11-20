@@ -85,9 +85,8 @@ jobs:
         uses: actions/setup-dotnet@v5
         with:
           dotnet-version: |
-            8.0.x
-            9.0.x
             10.0.x
+            11.0.x
 
       # Tag is the source of truth for shipped versions. Strips the
       # leading "v" (so v0.1.0 → 0.1.0). PACKAGE_VERSION flows through
